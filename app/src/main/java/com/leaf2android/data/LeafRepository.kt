@@ -343,7 +343,7 @@ class LeafRepository(private val context: Context) {
 
 
         if (frame.value("size") != null) throw LocalizedIOException(msg(R.string.the_back_enabled_an_unverified_packetized_size_9dd88))
-                val photo = withContext(Dispatchers.IO) {
+        val photo = withContext(Dispatchers.IO) {
             val raw = frame.attachment
             runCatching {
                 val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
