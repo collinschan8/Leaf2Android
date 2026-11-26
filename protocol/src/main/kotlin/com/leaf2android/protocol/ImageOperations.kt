@@ -64,8 +64,19 @@ object ImageOperations {
         return LeafCommand(command, fileName = path, timeoutMs = 60_000, requiresAttachment = true)
     }
 
+        fun setZoom(path: String, zoom: ImageZoom, point: ImagePoint? = null): LeafCommand {
+        val image = imagePath(path)
+        val command = if (zoom == ImageZoom.FIT || point == null) {
+            "^<ImageFunction file_name=\"$image\" zoom=\"0\" />"
+        } else {
+            "^<ImageFunction file_name=\"$image\" zoom=\"${zoom.factor}\" XCoord=\"${point.x}\" YCoord=\"${point.y}\" />"
+        }
+        return LeafCommand(command)
+    }
+
     /** Despite the vendor's `fstops` field name, both integers are image-click coordinates (caller 0x7a454). */
     fun pixelProbe(path: String, point: ImagePoint): LeafCommand = LeafCommand(
+
         "^<ImageFunction file_name=\"${imagePath(path)}\" fstops=\"${point.x};${point.y}\" />",
     )
 
