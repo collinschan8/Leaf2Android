@@ -343,7 +343,34 @@ class LeafRepository(private val context: Context) {
 
 
         if (frame.value("size") != null) throw LocalizedIOException(msg(R.string.the_back_enabled_an_unverified_packetized_size_9dd88))
-        val photo = withContext(Dispatchers.IO) { store.putProcessed(path, frame.attachment) }
+                val photo = withContext(Dispatchers.IO) {
+            val raw = frame.attachment
+            runCatching {
+                val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                dir.mkdirs()
+                java.io.File(dir, "valeo_zoom_test.bin").writeBytes(raw)
+            }
+            var bestOffset = 0
+            var bestArea = 0L
+            for (i in 0 until raw.size - 3) {
+                if (raw[i] == 0xFF.toByte() && raw[i + 1] == 0xD8.toByte() && raw[i + 2] == 0xFF.toByte()) {
+                    val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    android.graphics.BitmapFactory.decodeByteArray(raw, i, raw.size - i, opts)
+                    val area = opts.outWidth.toLong() * opts.outHeight.toLong()
+                    if (area > bestArea) {
+                        bestArea = area
+                        bestOffset = i
+                    }
+                }
+            }
+            val finalBytes = if (bestOffset > 0) raw.copyOfRange(bestOffset, raw.size) else raw
+            runCatching {
+                val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                java.io.File(dir, "valeo_zoom_test.jpg").writeBytes(finalBytes)
+            }
+            store.putProcessed(path, finalBytes)
+        }
+
         mutable.update { it.copy(backPreview = ProcessedBackPreview(photo.copy(deviceAddress = it.deviceAddress, connectionGeneration = it.connectionGeneration), frame.value("light", p.encoding.charset), grayPoint)) }
     }
     fun requestPixelProbe(path: String, point: ImagePoint) = controls(msg(R.string.reading_back_pixel_probe)) { p ->
