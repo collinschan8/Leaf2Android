@@ -114,8 +114,6 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
         }
     }
     val grayFraction = if (grayFractionX != null && grayFractionY != null) ImageFraction(grayFractionX!!, grayFractionY!!) else null
-
-    val grayFraction = if (grayFractionX != null && grayFractionY != null) ImageFraction(grayFractionX!!, grayFractionY!!) else null
     val grayPoint = if (grayPointX != null && grayPointY != null) ImagePoint(grayPointX!!, grayPointY!!) else null
     val activeBackPreview = session.backPreview?.takeIf {
         it.photo.path == photo.path && it.photo.deviceAddress == session.deviceAddress &&
