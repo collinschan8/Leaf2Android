@@ -338,8 +338,17 @@ class LeafRepository(private val context: Context) {
     }
     fun requestBackPreview(path: String, zoom: ImageZoom, point: ImagePoint?, alarm: ExposureEdge?, grayPoint: ImagePoint?) = controls(msg(R.string.reading_processed_preview)) { p ->
         requireCurrentPhoto(path)
-        if (grayPoint != null) mutable.update { it.copy(backPreview = null) }
-        val frame = p.execute(ImageOperations.preview(path, zoom, point, alarm, grayPoint))
+                if (grayPoint != null) mutable.update { it.copy(backPreview = null) }
+        val isDp67 = runCatching { shootingConfiguration().dialect == ShootSetupDialect.DP67 }.getOrDefault(false)
+        val frame = if (isDp67 && zoom != ImageZoom.FIT && point != null && alarm == null && grayPoint == null) {
+            p.execute(ImageOperations.setZoom(path, zoom, point))
+            val zoomedFrame = p.execute(ImageOperations.preview(path, ImageZoom.FIT, null, null, null))
+            runCatching { p.execute(ImageOperations.setZoom(path, ImageZoom.FIT, null)) }
+            zoomedFrame
+        } else {
+            p.execute(ImageOperations.preview(path, zoom, point, alarm, grayPoint))
+        }
+
         if (frame.value("size") != null) throw LocalizedIOException(msg(R.string.the_back_enabled_an_unverified_packetized_size_9dd88))
         val photo = withContext(Dispatchers.IO) { store.putProcessed(path, frame.attachment) }
         mutable.update { it.copy(backPreview = ProcessedBackPreview(photo.copy(deviceAddress = it.deviceAddress, connectionGeneration = it.connectionGeneration), frame.value("light", p.encoding.charset), grayPoint)) }
