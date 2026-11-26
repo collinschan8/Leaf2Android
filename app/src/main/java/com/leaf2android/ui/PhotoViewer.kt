@@ -285,7 +285,7 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
             }
         }
         if (histogram && loaded != null) Histogram(loaded!!.analysis.rgb)
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
             IconButton(onClick = { move(Viewport()) }, enabled = loaded != null) { Icon(Icons.Default.FitScreen, tr(R.string.fit_to_screen_407f7)) }
             IconToggleButton(
                 checked = backZoomMode,
