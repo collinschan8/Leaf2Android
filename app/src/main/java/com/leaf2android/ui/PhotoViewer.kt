@@ -96,12 +96,30 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
     var grayPointX by rememberSaveable(photo.path, photo.sha256, photo.connectionGeneration) { mutableStateOf<Int?>(null) }
     var grayPointY by rememberSaveable(photo.path, photo.sha256, photo.connectionGeneration) { mutableStateOf<Int?>(null) }
     var grayOutsideImage by rememberSaveable(photo.path, photo.connectionGeneration) { mutableStateOf(false) }
+    var backZoomMode by rememberSaveable(photo.path, photo.connectionGeneration) { mutableStateOf(false) }
+    var backZoomBitmap by remember(photo.path, photo.connectionGeneration) { mutableStateOf<Bitmap?>(null) }
     val session by repo.state.collectAsStateWithLifecycle()
     val currentBackPhoto = connected && isCurrentBackPhoto(photo, session)
     val backEnabled = currentBackPhoto && !session.controlsBusy && !session.labMode
     val grayMapping = remember(photo.metadata, photo.sha256, photo.metadataPreviewSha256, session.camera, photo.width, photo.height) { photoGrayMapping(photo, session.camera) }
     val grayFraction = if (grayFractionX != null && grayFractionY != null) ImageFraction(grayFractionX!!, grayFractionY!!) else null
     val grayPoint = if (grayPointX != null && grayPointY != null) ImagePoint(grayPointX!!, grayPointY!!) else null
+    val activeBackPreview = session.backPreview?.takeIf {
+        it.photo.path == photo.path && it.photo.deviceAddress == session.deviceAddress &&
+            it.photo.connectionGeneration == session.connectionGeneration && it.zoom == ImageZoom.X1
+    }
+    LaunchedEffect(activeBackPreview?.photo?.sha256, backZoomMode) {
+        if (!backZoomMode) {
+            backZoomBitmap = null
+        } else {
+            val file = activeBackPreview?.photo?.cacheFile
+            backZoomBitmap = if (file != null) {
+                withContext(Dispatchers.Default) { BitmapFactory.decodeFile(file) }
+            } else {
+                null
+            }
+        }
+    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val export = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/jpeg")) { uri ->
@@ -147,154 +165,3 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
         }
         if (connected && !photo.isDemo && !currentBackPhoto) Text(tr(R.string.refresh_photo_before_back_write),
             Modifier.padding(horizontal = 20.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall)
-        if (grayPicking) Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(tr(R.string.gray_pick_mode_hint), style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("gray-pick-mode"))
-            if (grayMapping == null) Text(tr(R.string.gray_pick_unavailable), style = MaterialTheme.typography.bodySmall)
-            if (grayOutsideImage) Text(tr(R.string.gray_pick_outside_image), style = MaterialTheme.typography.bodySmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextButton(onClick = { grayPicking = false; grayFractionX = null; grayFractionY = null; grayPointX = null; grayPointY = null }, modifier = Modifier.testTag("cancel-gray-pick")) { Text(tr(R.string.gray_pick_cancel)) }
-                TextButton(onClick = { repo.requestMetadata(photo.path) }, enabled = backEnabled, modifier = Modifier.testTag("gray-pick-read-metadata")) { Text(tr(R.string.gray_pick_read_metadata)) }
-            }
-        }
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
-            .clip(MaterialTheme.shapes.medium).background(Color(0xFF080B08)).testTag("photo-canvas")) {
-            val preview = loaded
-            if (preview == null) {
-                Column(Modifier.align(Alignment.Center).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (photo.cacheFile != null && loadError == null) CircularProgressIndicator(Modifier.size(24.dp))
-                    else Text(loadError ?: if (connected) tr(R.string.requesting_preview_20b1e) else tr(R.string.this_preview_is_not_cached_connect_to_the_back_c43ff), color = Color(0xFFC7D4C1))
-                }
-            } else {
-                val density = LocalDensity.current
-                val areaW = with(density) { maxWidth.toPx() }; val areaH = with(density) { maxHeight.toPx() }
-                val fit = min(areaW / preview.bitmap.width, areaH / preview.bitmap.height)
-                val fitW = preview.bitmap.width * fit; val fitH = preview.bitmap.height * fit
-                fun bounded(zoom: Float, x: Float, y: Float): Viewport {
-                    val z = zoom.coerceIn(1f, 12f)
-                    val maxX = max(0f, (fitW * z - areaW) / 2) / fitW
-                    val maxY = max(0f, (fitH * z - areaH) / 2) / fitH
-                    return Viewport(z, x.coerceIn(-maxX, maxX), y.coerceIn(-maxY, maxY))
-                }
-                val display = bounded(viewport.zoom, viewport.x, viewport.y)
-                val gestures = Modifier.fillMaxSize()
-                    .pointerInput(photo.path, areaW, areaH) {
-                        detectTransformGestures { centroid, pan, zoom, _ ->
-                            val old = bounded(viewport.zoom, viewport.x, viewport.y)
-                            val z = (old.zoom * zoom).coerceIn(1f, 12f)
-                            val ratio = z / old.zoom
-                            val cx = centroid.x - areaW / 2; val cy = centroid.y - areaH / 2
-                            move(bounded(z, ((old.x * fitW - cx) * ratio + cx + pan.x) / fitW,
-                                ((old.y * fitH - cy) * ratio + cy + pan.y) / fitH))
-                        }
-                    }.pointerInput(photo.path, areaW, areaH, grayPicking, grayMapping, backEnabled) {
-                        detectTapGestures(onDoubleTap = { point ->
-                            if (viewport.zoom > 1.1f) move(Viewport())
-                            else move(bounded(2f, -(point.x - areaW / 2) / fitW, -(point.y - areaH / 2) / fitH))
-                        }, onTap = { tapped ->
-                            if (grayPicking && backEnabled) {
-                                val current = bounded(viewport.zoom, viewport.x, viewport.y)
-                                val fraction = PhotoViewportGeometry(areaW.toDouble(), areaH.toDouble(), preview.bitmap.width, preview.bitmap.height,
-                                    current.zoom.toDouble(), (current.x * fitW).toDouble(), (current.y * fitH).toDouble())
-                                    .imageFractionAt(CanvasPoint(tapped.x.toDouble(), tapped.y.toDouble()))
-                                grayOutsideImage = fraction == null
-                                if (fraction != null) {
-                                    grayFractionX = fraction.x
-                                    grayFractionY = fraction.y
-                                    val point = grayMapping?.protocolPoint(fraction)
-                                    if (point != null) {
-                                        grayPointX = point.x
-                                        grayPointY = point.y
-                                        repo.requestBackPreview(photo.path, ImageZoom.FIT, null, null, point)
-                                        grayPicking = false
-                                        imageTools = true
-                                    }
-                                }
-                            }
-                        })
-                    }
-                Box(gestures, contentAlignment = Alignment.Center) {
-                    val imageModifier = Modifier.size(with(density) { fitW.toDp() }, with(density) { fitH.toDp() })
-                        .graphicsLayer { scaleX = display.zoom; scaleY = display.zoom; translationX = display.x * fitW; translationY = display.y * fitH }
-                    Image(preview.bitmap.asImageBitmap(), photo.name, imageModifier.testTag("photo-image"), contentScale = ContentScale.FillBounds)
-                    if (highlight) Image(preview.analysis.high.asImageBitmap(), tr(R.string.jpeg_highlight_warning_9186a), imageModifier, contentScale = ContentScale.FillBounds)
-                    if (shadow) Image(preview.analysis.low.asImageBitmap(), tr(R.string.jpeg_shadow_warning_20ffe), imageModifier, contentScale = ContentScale.FillBounds)
-                }
-                if (grayFraction != null) GrayPointMarker(grayFraction, preview.bitmap.width, preview.bitmap.height, Modifier.fillMaxSize(),
-                    display.zoom, display.x * fitW, display.y * fitH)
-                Surface(color = Color(0xB8222A20), shape = MaterialTheme.shapes.extraSmall, modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp)) {
-                    Text("%.1f×".format(display.zoom), Modifier.padding(horizontal = 8.dp, vertical = 4.dp), color = Color(0xFFE3ECDC), style = MaterialTheme.typography.labelSmall)
-                }
-                if (photo.isDemo) Text(tr(R.string.demo_watermark), Modifier.align(Alignment.TopStart).padding(12.dp), color = Color(0xFFA7B99C), style = MaterialTheme.typography.labelSmall)
-            }
-        }
-        if (histogram && loaded != null) Histogram(loaded!!.analysis.rgb)
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
-            IconButton(onClick = { move(Viewport()) }, enabled = loaded != null) { Icon(Icons.Default.FitScreen, tr(R.string.fit_to_screen_407f7)) }
-            IconToggleButton(histogram, { value -> repo.updateSettings { it.copy(showHistogram = value) } }) { Icon(Icons.Default.BarChart, tr(R.string.jpeg_histogram)) }
-            IconToggleButton(highlight, { value -> repo.updateSettings { it.copy(showHighlights = value) } }) { Icon(Icons.Default.LightMode, tr(R.string.jpeg_highlight_warning_9186a)) }
-            IconToggleButton(shadow, { value -> repo.updateSettings { it.copy(showShadows = value) } }) { Icon(Icons.Default.Contrast, tr(R.string.jpeg_shadow_warning_20ffe)) }
-            IconButton(onClick = { notes = true }) { Icon(Icons.Default.EditNote, tr(R.string.local_and_back_notes_7d42c)) }
-            IconButton(onClick = { export.launch(photo.name.substringBeforeLast('.') + "-preview.jpg") }, enabled = photo.cacheFile != null) { Icon(Icons.Default.SaveAlt, tr(R.string.save_jpeg_preview_901e5)) }
-        }
-        if (highlight || shadow) Text(tr(R.string.jpeg_sample_warning_highlight_250_largest_shado_d2e18), Modifier.padding(horizontal = 20.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-    if (info) AlertDialog(onDismissRequest = { info = false }, title = { Text(tr(R.string.photo_information_8aa32)) }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(photo.path, style = MaterialTheme.typography.bodySmall)
-            Text(tr(R.string.photo_details, photo.source.label, photo.width, photo.height, formatBytes(photo.bytes), if (photo.starred) tr(R.string.yes) else tr(R.string.no)), style = MaterialTheme.typography.bodySmall)
-            if (loaded != null && loaded!!.bitmap.width != photo.width) Text(tr(R.string.the_displayed_image_was_reduced_to_limit_memory_d149a), style = MaterialTheme.typography.bodySmall)
-            if (photo.sha256.isNotEmpty()) Text(tr(R.string.preview_sha_256_n_1_s_46583 , photo.sha256), style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace)
-            photo.metadata.forEach { (key, value) -> Text(tr(R.string.metadata_value, if (key == "camera_directory_date" || key == "目录日期") tr(R.string.directory_date_99665) else key, value), style = MaterialTheme.typography.bodySmall) }
-            if (photo.localNote.isNotEmpty()) Text(tr(R.string.local_note_1_s_d7494 , photo.localNote))
-            Text(tr(R.string.preview_attachments_and_mos_originals_are_separ_3b71f), style = MaterialTheme.typography.bodySmall)
-        }
-    }, confirmButton = { TextButton(onClick = { info = false }) { Text(tr(R.string.close_6c14b)) } }, dismissButton = {
-        TextButton(onClick = { repo.requestMetadata(photo.path) }, enabled = connected && !photo.isDemo) { Text(tr(R.string.read_back_information_80058)) }
-    })
-    if (notes) NotesDialog(photo, session, repo) { notes = false }
-    if (photoActions) PhotoActionsDialog(photo, session, repo, editNotes = { photoActions = false; notes = true }) { photoActions = false }
-    if (imageTools) BackImageToolsDialog(photo, session, repo,
-        pickGrayPoint = {
-            imageTools = false
-            grayPicking = true
-            grayOutsideImage = false
-            // Run once for this explicit entry, never from composition or locale recreation.
-            if (grayMapping == null && backEnabled && session.operation.isEmpty()) repo.requestMetadata(photo.path)
-        },
-        initialGrayPoint = grayPoint, initialGrayFraction = grayFraction,
-    ) { imageTools = false }
-}
-
-@Composable private fun Histogram(channels: List<IntArray>) {
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
-        Text(tr(R.string.histogram_source_label), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Canvas(Modifier.fillMaxWidth().height(44.dp).padding(top = 4.dp)) {
-            drawLine(Color.Gray.copy(alpha = .5f), Offset(0f, size.height), Offset(size.width, size.height))
-            val peak = channels.maxOf { it.maxOrNull() ?: 1 }.coerceAtLeast(1)
-            val colors = listOf(Color(0xFFE48073), Color(0xFFADDA86), Color(0xFF81B8EE))
-            channels.forEachIndexed { c, values ->
-                val path = Path().apply {
-                    moveTo(0f, size.height)
-                    values.forEachIndexed { i, n -> lineTo(i / 255f * size.width, size.height * (1f - n.toFloat() / peak)) }
-                    lineTo(size.width, size.height); close()
-                }
-                drawPath(path, colors[c].copy(alpha = .45f))
-            }
-        }
-    }
-}
-
-@Composable private fun NotesDialog(photo: LeafPhoto, state: SessionState, repo: LeafRepository, close: () -> Unit) {
-    var note by rememberSaveable(photo.path) { mutableStateOf(photo.localNote) }
-    var copyright by rememberSaveable(photo.path) { mutableStateOf(photo.metadata.entries.firstOrNull { it.key.equals("copyright", true) }?.value.orEmpty()) }
-    AlertDialog(onDismissRequest = close, title = { Text(tr(R.string.notes_and_flags_53c7a)) }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(photo.path, style = MaterialTheme.typography.bodySmall)
-            Text(tr(R.string.stars_and_local_notes_are_saved_on_the_phone_th_97eb9), style = MaterialTheme.typography.bodySmall)
-            OutlinedTextField(note, { note = it.take(4000) }, label = { Text(tr(R.string.note_e0361)) }, minLines = 3)
-            OutlinedTextField(copyright, { copyright = it.take(1000) }, label = { Text(tr(R.string.back_copyright_field_optional_02e2d)) })
-            Text(tr(R.string.writing_to_the_back_uses_the_original_wiview_se_49c33), style = MaterialTheme.typography.bodySmall)
-            OutlinedButton(onClick = { repo.writeCameraNotes(photo.path, copyright, note); close() }, enabled = isCurrentBackPhoto(photo, state) && !state.controlsBusy && !state.labMode) { Text(tr(R.string.writing_notes_to_back_18e71)) }
-        }
-    }, confirmButton = { TextButton(onClick = { repo.localNote(photo.path, note); close() }) { Text(tr(R.string.save_local_note_3fc9a)) } }, dismissButton = { TextButton(onClick = close) { Text(tr(R.string.cancel_4d0b4)) } })
-}
