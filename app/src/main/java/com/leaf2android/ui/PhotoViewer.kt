@@ -242,6 +242,7 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
                                     if (point != null) {
                                         repo.requestBackPreview(photo.path, ImageZoom.entries.first { it.factor == 1 }, point, null, null)
 
+
                                     } else if (session.operation.isEmpty()) {
                                         repo.requestMetadata(photo.path)
                                     }
