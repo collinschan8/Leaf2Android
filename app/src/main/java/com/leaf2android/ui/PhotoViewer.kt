@@ -106,7 +106,7 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
     val grayPoint = if (grayPointX != null && grayPointY != null) ImagePoint(grayPointX!!, grayPointY!!) else null
     val activeBackPreview = session.backPreview?.takeIf {
         it.photo.path == photo.path && it.photo.deviceAddress == session.deviceAddress &&
-            it.photo.connectionGeneration == session.connectionGeneration && it.zoom == ImageZoom.X1
+            it.photo.connectionGeneration == session.connectionGeneration && it.sampledPoint == null
     }
     LaunchedEffect(activeBackPreview?.photo?.sha256, backZoomMode) {
         if (!backZoomMode) {
