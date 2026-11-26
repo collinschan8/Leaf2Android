@@ -102,6 +102,19 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
     val currentBackPhoto = connected && isCurrentBackPhoto(photo, session)
     val backEnabled = currentBackPhoto && !session.controlsBusy && !session.labMode
     val grayMapping = remember(photo.metadata, photo.sha256, photo.metadataPreviewSha256, session.camera, photo.width, photo.height) { photoGrayMapping(photo, session.camera) }
+        val focusMapping = remember(grayMapping, session.camera, photo.width, photo.height) {
+        grayMapping ?: run {
+            if (photo.width <= 0 || photo.height <= 0) return@run null
+            val raw = session.camera.entries.firstOrNull { it.key.equals("picturedimensions", true) }?.value
+            val dims = raw?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.filter { it > 0 }
+            if (dims != null && dims.size == 2) {
+                val isPortrait = photo.height > photo.width
+                PhotoGrayMapping(if (isPortrait) dims.min() else dims.max(), if (isPortrait) dims.max() else dims.min())
+            } else PhotoGrayMapping(photo.width, photo.height)
+        }
+    }
+    val grayFraction = if (grayFractionX != null && grayFractionY != null) ImageFraction(grayFractionX!!, grayFractionY!!) else null
+
     val grayFraction = if (grayFractionX != null && grayFractionY != null) ImageFraction(grayFractionX!!, grayFractionY!!) else null
     val grayPoint = if (grayPointX != null && grayPointY != null) ImagePoint(grayPointX!!, grayPointY!!) else null
     val activeBackPreview = session.backPreview?.takeIf {
@@ -168,7 +181,7 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
         if (backZoomMode) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 if (session.controlsBusy) "正在向機背讀取 1:1 放大圖..."
-                else if (grayMapping == null) "正在讀取照片尺寸以計算對焦座標..."
+                else if (focusMapping == null) "正在讀取照片尺寸以計算對焦座標..."
                 else if (backZoomBitmap != null) "1:1 機背原圖對焦檢視（點其他位置可切換，再按放大鏡返回）"
                 else "請直接點擊照片要檢查對焦的位置",
                 style = MaterialTheme.typography.bodySmall,
@@ -227,7 +240,7 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
                             move(bounded(z, ((old.x * fitW - cx) * ratio + cx + pan.x) / fitW,
                                 ((old.y * fitH - cy) * ratio + cy + pan.y) / fitH))
                         }
-                    }.pointerInput(photo.path, areaW, areaH, grayPicking, backZoomMode, grayMapping, backEnabled) {
+                    }.pointerInput(photo.path, areaW, areaH, grayPicking, backZoomMode, focusMapping, backEnabled) {
                         detectTapGestures(onDoubleTap = { point ->
                             if (viewport.zoom > 1.1f) move(Viewport())
                             else move(bounded(2f, -(point.x - areaW / 2) / fitW, -(point.y - areaH / 2) / fitH))
@@ -238,7 +251,7 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
                                     current.zoom.toDouble(), (current.x * fitW).toDouble(), (current.y * fitH).toDouble())
                                     .imageFractionAt(CanvasPoint(tapped.x.toDouble(), tapped.y.toDouble()))
                                 if (fraction != null) {
-                                    val point = grayMapping?.protocolPoint(fraction)
+                                    val point = focusMapping?.protocolPoint(fraction)
                                     if (point != null) {
                                         repo.requestBackPreview(photo.path, ImageZoom.entries.first { it.factor == 8 }, point, null, null)
 
