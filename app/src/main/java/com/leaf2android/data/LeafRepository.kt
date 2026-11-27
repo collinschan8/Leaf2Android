@@ -402,11 +402,19 @@ class LeafRepository(private val context: Context) {
                 }
             }
         }
-        val d9 = (2 until raw.size - 1).firstOrNull { raw[it] == 0xFF.toByte() && raw[it + 1] == 0xD9.toByte() } ?: -1
-        val afterD9 = if (d9 >= 0) raw.drop(d9 + 2).take(24).joinToString("") { "%02X".format(it) } else "none"
-        val fOpts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        android.graphics.BitmapFactory.decodeByteArray(finalBytes, 0, finalBytes.size, fOpts)
-        log("ZOOM_DBG raw=${raw.size} d9=$d9 after=$afterD9 out=${fOpts.outWidth}x${fOpts.outHeight}")
+             val segs = mutableListOf<String>()
+     var p = 2
+     while (p < raw.size - 4) {
+         if (raw[p] == 0xFF.toByte() && raw[p + 1] != 0x00.toByte() && raw[p + 1] != 0xFF.toByte()) {
+             val m = raw[p + 1].toInt() and 0xFF
+             if (m in 0xD0..0xD9) { segs.add("%02X@%d".format(m, p)); p += 2; continue }
+             val len = ((raw[p + 2].toInt() and 0xFF) shl 8) or (raw[p + 3].toInt() and 0xFF)
+             segs.add("%02X@%d(len=%d)".format(m, p, len))
+             if (m == 0xDA) break
+             p += 2 + len
+         } else p++
+     }
+     log("ZOOM_SEGS total=${raw.size} -> ${segs.joinToString(" ")}")
 
             runCatching {
                 val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
