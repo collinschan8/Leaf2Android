@@ -58,8 +58,10 @@ object ImageOperations {
                     .append("\" YCoord=\"").append(point.y).append('"')
             }
             if (alarm != null) append(" Alarm=\"yes\" edge=\"").append(alarm.wireValue).append('"')
-            if (grayBalanceAt != null) append(" light=\"").append(grayBalanceAt.x).append(',').append(grayBalanceAt.y).append('"')
-            append(" />")
+                     if (grayBalanceAt != null) append(" light=\"").append(grayBalanceAt.x).append(',').append(grayBalanceAt.y).append('"')
+         if (zoom != ImageZoom.FIT) append(" PacketSize=\"0\"")
+         append(" />")
+
         }
         return LeafCommand(command, fileName = path, timeoutMs = 60_000, requiresAttachment = true)
     }
