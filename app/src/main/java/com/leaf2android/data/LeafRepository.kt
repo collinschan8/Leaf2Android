@@ -350,21 +350,59 @@ class LeafRepository(private val context: Context) {
                 dir.mkdirs()
                 java.io.File(dir, "valeo_zoom_test.bin").writeBytes(raw)
             }
-            var bestOffset = 0
-            var bestArea = 0L
-            for (i in 0 until raw.size - 3) {
-                    if (raw[i] == 0xFF.toByte() && raw[i + 1] == 0xD8.toByte()) {
-
-                    val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    android.graphics.BitmapFactory.decodeByteArray(raw, i, raw.size - i, opts)
-                    val area = opts.outWidth.toLong() * opts.outHeight.toLong()
-                    if (area > bestArea) {
-                        bestArea = area
-                        bestOffset = i
-                    }
+                   var finalBytes = raw
+        var bestPixels = 0
+        for (i in 0 until raw.size - 3) {
+            if (raw[i] == 0xFF.toByte() && raw[i + 1] == 0xD8.toByte()) {
+                val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeByteArray(raw, i, raw.size - i, opts)
+                val pixels = opts.outWidth * opts.outHeight
+                if (pixels > bestPixels) {
+                    bestPixels = pixels
+                    finalBytes = raw.copyOfRange(i, raw.size)
                 }
             }
-            val finalBytes = if (bestOffset > 0) raw.copyOfRange(bestOffset, raw.size) else raw
+        }
+        if (bestPixels in 1..150000 && raw.size > 25000) {
+            var eoi = -1
+            for (i in 2 until raw.size - 100) {
+                if (raw[i] == 0xFF.toByte() && raw[i + 1] == 0xD9.toByte()) {
+                    eoi = i
+                    break
+                }
+            }
+            var sos = -1
+            for (i in 2 until (eoi.takeIf { it > 0 } ?: 2000)) {
+                if (raw[i] == 0xFF.toByte() && raw[i + 1] == 0xDA.toByte()) {
+                    val len = ((raw[i + 2].toInt() and 0xFF) shl 8) or (raw[i + 3].toInt() and 0xFF)
+                    sos = i + 2 + len
+                    break
+                }
+            }
+            if (eoi > 0 && sos > 0 && eoi + 2 < raw.size) {
+                val hdr = raw.copyOfRange(0, sos)
+                for (j in 2 until hdr.size - 8) {
+                    if (hdr[j] == 0xFF.toByte() && (hdr[j + 1] == 0xC0.toByte() || hdr[j + 1] == 0xC2.toByte())) {
+                        val h = ((hdr[j + 5].toInt() and 0xFF) shl 8) or (hdr[j + 6].toInt() and 0xFF)
+                        val w = ((hdr[j + 7].toInt() and 0xFF) shl 8) or (hdr[j + 8].toInt() and 0xFF)
+                        val nw = if (w >= h) 1024 else 768
+                        val nh = if (w >= h) 768 else 1024
+                        hdr[j + 5] = (nh shr 8).toByte()
+                        hdr[j + 6] = (nh and 0xFF).toByte()
+                        hdr[j + 7] = (nw shr 8).toByte()
+                        hdr[j + 8] = (nw and 0xFF).toByte()
+                        break
+                    }
+                }
+                val cand = hdr + raw.copyOfRange(eoi + 2, raw.size)
+                val check = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                android.graphics.BitmapFactory.decodeByteArray(cand, 0, cand.size, check)
+                if (check.outWidth > 500) {
+                    finalBytes = cand
+                }
+            }
+        }
+
             runCatching {
                 val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
                 java.io.File(dir, "valeo_zoom_test.jpg").writeBytes(finalBytes)
