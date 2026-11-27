@@ -46,7 +46,14 @@ object ImageOperations {
         zoom: ImageZoom = ImageZoom.FIT,
         point: ImagePoint? = null,
         alarm: ExposureEdge? = null,
+        
+            fun preview(
+        path: String,
+        zoom: ImageZoom = ImageZoom.FIT,
+        point: ImagePoint? = null,
+        alarm: ExposureEdge? = null,
         grayBalanceAt: ImagePoint? = null,
+        packetSize: Int? = null,
     ): LeafCommand {
         if ((zoom == ImageZoom.FIT) != (point == null)) throw ProtocolException(
             "后背放大请求需要原图坐标；适合屏幕请求不带坐标", "Back zoom requests require original-image coordinates; fit requests omit coordinates.")
@@ -58,9 +65,12 @@ object ImageOperations {
                     .append("\" YCoord=\"").append(point.y).append('"')
             }
             if (alarm != null) append(" Alarm=\"yes\" edge=\"").append(alarm.wireValue).append('"')
-                     if (grayBalanceAt != null) append(" light=\"").append(grayBalanceAt.x).append(',').append(grayBalanceAt.y).append('"')
-         if (zoom != ImageZoom.FIT) append(" PacketSize=\"0\"")
-         append(" />")
+            if (grayBalanceAt != null) append(" light=\"").append(grayBalanceAt.x).append(',').append(grayBalanceAt.y).append('"')
+            if (packetSize != null) append(" PacketSize=\"").append(packetSize).append('"')
+            append(" />")
+        }
+        return LeafCommand(command, fileName = path, timeoutMs = 60_000, requiresAttachment = true)
+    }
 
         }
         return LeafCommand(command, fileName = path, timeoutMs = 60_000, requiresAttachment = true)
