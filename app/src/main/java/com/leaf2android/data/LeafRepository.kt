@@ -353,7 +353,8 @@ class LeafRepository(private val context: Context) {
             var bestOffset = 0
             var bestArea = 0L
             for (i in 0 until raw.size - 3) {
-                if (raw[i] == 0xFF.toByte() && raw[i + 1] == 0xD8.toByte() && raw[i + 2] == 0xFF.toByte()) {
+                    if (raw[i] == 0xFF.toByte() && raw[i + 1] == 0xD8.toByte()) {
+
                     val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     android.graphics.BitmapFactory.decodeByteArray(raw, i, raw.size - i, opts)
                     val area = opts.outWidth.toLong() * opts.outHeight.toLong()
