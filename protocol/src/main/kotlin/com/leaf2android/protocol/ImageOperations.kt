@@ -40,14 +40,7 @@ data class BackHistograms(
 object ImageOperations {
     const val MAX_HISTOGRAM_BINS = 4096 // Host limit; the client does not prove a fixed hardware bin count.
     private const val MAX_HISTOGRAM_TEXT = 64 * 1024
-
     fun preview(
-        path: String,
-        zoom: ImageZoom = ImageZoom.FIT,
-        point: ImagePoint? = null,
-        alarm: ExposureEdge? = null,
-        
-            fun preview(
         path: String,
         zoom: ImageZoom = ImageZoom.FIT,
         point: ImagePoint? = null,
