@@ -341,7 +341,7 @@ class LeafRepository(private val context: Context) {
                 if (grayPoint != null) mutable.update { it.copy(backPreview = null) }
                 val frame = p.execute(ImageOperations.preview(path, zoom, point, alarm, grayPoint))
 
-        if (frame.value("size") != null) throw LocalizedIOException(msg(R.string.the_back_enabled_an_unverified_packetized_size_
+        
         val photo = withContext(Dispatchers.IO) {
 
             val raw = frame.attachment
