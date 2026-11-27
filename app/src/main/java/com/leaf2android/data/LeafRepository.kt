@@ -402,6 +402,11 @@ class LeafRepository(private val context: Context) {
                 }
             }
         }
+        val d9 = (2 until raw.size - 1).firstOrNull { raw[it] == 0xFF.toByte() && raw[it + 1] == 0xD9.toByte() } ?: -1
+        val afterD9 = if (d9 >= 0) raw.drop(d9 + 2).take(24).joinToString("") { "%02X".format(it) } else "none"
+        val fOpts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeByteArray(finalBytes, 0, finalBytes.size, fOpts)
+        log("ZOOM_DBG raw=${raw.size} d9=$d9 after=$afterD9 out=${fOpts.outWidth}x${fOpts.outHeight}")
 
             runCatching {
                 val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
