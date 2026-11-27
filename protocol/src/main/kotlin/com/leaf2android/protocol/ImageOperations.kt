@@ -40,23 +40,24 @@ data class BackHistograms(
 object ImageOperations {
     const val MAX_HISTOGRAM_BINS = 4096 // Host limit; the client does not prove a fixed hardware bin count.
     private const val MAX_HISTOGRAM_TEXT = 64 * 1024
-    fun preview(
+        fun preview(
         path: String,
         zoom: ImageZoom = ImageZoom.FIT,
         point: ImagePoint? = null,
         alarm: ExposureEdge? = null,
         grayBalanceAt: ImagePoint? = null,
         packetSize: Int? = null,
+        zoomLiteral: String? = null,
     ): LeafCommand {
         if ((zoom == ImageZoom.FIT) != (point == null)) throw ProtocolException(
             "后背放大请求需要原图坐标；适合屏幕请求不带坐标", "Back zoom requests require original-image coordinates; fit requests omit coordinates.")
         val image = imagePath(path)
         val command = buildString {
             append("^<GetImage file_name=\"").append(image).append('"')
-                     if (zoom != ImageZoom.FIT) {
-             append(" zoom=\"FP\" XCoord=\"").append(point!!.x)
-                 .append("\" YCoord=\"").append(point.y).append('"')
-         }
+            if (zoom != ImageZoom.FIT) {
+                append(" zoom=\"").append(zoomLiteral ?: zoom.factor).append("\" XCoord=\"").append(point!!.x)
+                    .append("\" YCoord=\"").append(point.y).append('"')
+            }
             if (alarm != null) append(" Alarm=\"yes\" edge=\"").append(alarm.wireValue).append('"')
             if (grayBalanceAt != null) append(" light=\"").append(grayBalanceAt.x).append(',').append(grayBalanceAt.y).append('"')
             if (packetSize != null) append(" PacketSize=\"").append(packetSize).append('"')
@@ -64,6 +65,7 @@ object ImageOperations {
         }
         return LeafCommand(command, fileName = path, timeoutMs = 60_000, requiresAttachment = true)
     }
+
 
         fun setZoom(path: String, zoom: ImageZoom, point: ImagePoint? = null): LeafCommand {
         val image = imagePath(path)
