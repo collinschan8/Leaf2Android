@@ -65,10 +65,6 @@ object ImageOperations {
         return LeafCommand(command, fileName = path, timeoutMs = 60_000, requiresAttachment = true)
     }
 
-        }
-        return LeafCommand(command, fileName = path, timeoutMs = 60_000, requiresAttachment = true)
-    }
-
         fun setZoom(path: String, zoom: ImageZoom, point: ImagePoint? = null): LeafCommand {
         val image = imagePath(path)
         val command = if (zoom == ImageZoom.FIT || point == null) {
