@@ -53,10 +53,10 @@ object ImageOperations {
         val image = imagePath(path)
         val command = buildString {
             append("^<GetImage file_name=\"").append(image).append('"')
-            if (zoom != ImageZoom.FIT) {
-                append(" zoom=\"").append(zoom.factor).append("\" XCoord=\"").append(point!!.x)
-                    .append("\" YCoord=\"").append(point.y).append('"')
-            }
+                     if (zoom != ImageZoom.FIT) {
+             append(" zoom=\"FP\" XCoord=\"").append(point!!.x)
+                 .append("\" YCoord=\"").append(point.y).append('"')
+         }
             if (alarm != null) append(" Alarm=\"yes\" edge=\"").append(alarm.wireValue).append('"')
             if (grayBalanceAt != null) append(" light=\"").append(grayBalanceAt.x).append(',').append(grayBalanceAt.y).append('"')
             if (packetSize != null) append(" PacketSize=\"").append(packetSize).append('"')
