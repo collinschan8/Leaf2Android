@@ -338,84 +338,60 @@ class LeafRepository(private val context: Context) {
     }
     fun requestBackPreview(path: String, zoom: ImageZoom, point: ImagePoint?, alarm: ExposureEdge?, grayPoint: ImagePoint?) = controls(msg(R.string.reading_processed_preview)) { p ->
         requireCurrentPhoto(path)
-                if (grayPoint != null) mutable.update { it.copy(backPreview = null) }
-                val frame = p.execute(ImageOperations.preview(path, zoom, point, alarm, grayPoint, packetSize = if (zoom != ImageZoom.FIT) 0 else null, zoomLiteral = if (zoom != ImageZoom.FIT) zoom.factor.toString() else null))
+        if (grayPoint != null) mutable.update { it.copy(backPreview = null) }
+        val frame = p.execute(
+            ImageOperations.preview(
+                path,
+                zoom,
+                point,
+                alarm,
+                grayPoint,
+                packetSize = if (zoom != ImageZoom.FIT) 0 else null,
+                zoomLiteral = if (zoom != ImageZoom.FIT) zoom.factor.toString() else null
+            )
+        )
 
-
-        
         val photo = withContext(Dispatchers.IO) {
-
             val raw = frame.attachment
             runCatching {
                 val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
                 dir.mkdirs()
                 java.io.File(dir, "valeo_zoom_test.bin").writeBytes(raw)
             }
-                   var finalBytes = raw
-        var bestPixels = 0
-        for (i in 0 until raw.size - 3) {
-            if (raw[i] == 0xFF.toByte() && raw[i + 1] == 0xD8.toByte()) {
-                val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                android.graphics.BitmapFactory.decodeByteArray(raw, i, raw.size - i, opts)
-                val pixels = opts.outWidth * opts.outHeight
-                if (pixels > bestPixels) {
-                    bestPixels = pixels
-                    finalBytes = raw.copyOfRange(i, raw.size)
-                }
-            }
-        }
-        if (bestPixels in 1..150000 && raw.size > 25000) {
-            var eoi = -1
-            for (i in 2 until raw.size - 100) {
-                if (raw[i] == 0xFF.toByte() && raw[i + 1] == 0xD9.toByte()) {
-                    eoi = i
-                    break
-                }
-            }
-            var sos = -1
-            for (i in 2 until (eoi.takeIf { it > 0 } ?: 2000)) {
-                if (raw[i] == 0xFF.toByte() && raw[i + 1] == 0xDA.toByte()) {
-                    val len = ((raw[i + 2].toInt() and 0xFF) shl 8) or (raw[i + 3].toInt() and 0xFF)
-                    sos = i + 2 + len
-                    break
-                }
-            }
-            if (eoi > 0 && sos > 0 && eoi + 2 < raw.size) {
-                val hdr = raw.copyOfRange(0, sos)
-                for (j in 2 until hdr.size - 8) {
-                    if (hdr[j] == 0xFF.toByte() && (hdr[j + 1] == 0xC0.toByte() || hdr[j + 1] == 0xC2.toByte())) {
-                        val h = ((hdr[j + 5].toInt() and 0xFF) shl 8) or (hdr[j + 6].toInt() and 0xFF)
-                        val w = ((hdr[j + 7].toInt() and 0xFF) shl 8) or (hdr[j + 8].toInt() and 0xFF)
-                        val nw = if (w >= h) 1024 else 768
-                        val nh = if (w >= h) 768 else 1024
-                        hdr[j + 5] = (nh shr 8).toByte()
-                        hdr[j + 6] = (nh and 0xFF).toByte()
-                        hdr[j + 7] = (nw shr 8).toByte()
-                        hdr[j + 8] = (nw and 0xFF).toByte()
-                        break
+
+            var finalBytes = raw
+            var bestPixels = 0
+            for (i in 0 until raw.size - 3) {
+                if (raw[i] == 0xFF.toByte() && raw[i + 1] == 0xD8.toByte()) {
+                    val opts = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    android.graphics.BitmapFactory.decodeByteArray(raw, i, raw.size - i, opts)
+                    val pixels = opts.outWidth * opts.outHeight
+                    if (pixels > bestPixels) {
+                        bestPixels = pixels
+                        finalBytes = raw.copyOfRange(i, raw.size)
                     }
                 }
-                val cand = hdr + raw.copyOfRange(eoi + 2, raw.size)
-                val check = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                android.graphics.BitmapFactory.decodeByteArray(cand, 0, cand.size, check)
-                if (check.outWidth > 500) {
-                    finalBytes = cand
+            }
+
+            val segs = mutableListOf<String>()
+            var pos = 2
+            while (pos < raw.size - 4) {
+                if (raw[pos] == 0xFF.toByte() && raw[pos + 1] != 0x00.toByte() && raw[pos + 1] != 0xFF.toByte()) {
+                    val m = raw[pos + 1].toInt() and 0xFF
+                    if (m in 0xD0..0xD9) {
+                        segs.add("%02X@%d".format(m, pos))
+                        pos += 2
+                        continue
+                    }
+                    val len = ((raw[pos + 2].toInt() and 0xFF) shl 8) or (raw[pos + 3].toInt() and 0xFF)
+                    segs.add("%02X@%d(len=%d)".format(m, pos, len))
+                    if (m == 0xDA) break
+                    pos += 2 + len
+                } else {
+                    pos++
                 }
             }
-        }
-             val segs = mutableListOf<String>()
-     var p = 2
-     while (p < raw.size - 4) {
-         if (raw[p] == 0xFF.toByte() && raw[p + 1] != 0x00.toByte() && raw[p + 1] != 0xFF.toByte()) {
-             val m = raw[p + 1].toInt() and 0xFF
-             if (m in 0xD0..0xD9) { segs.add("%02X@%d".format(m, p)); p += 2; continue }
-             val len = ((raw[p + 2].toInt() and 0xFF) shl 8) or (raw[p + 3].toInt() and 0xFF)
-             segs.add("%02X@%d(len=%d)".format(m, p, len))
-             if (m == 0xDA) break
-             p += 2 + len
-         } else p++
-     }
-     log("ZOOM_SEGS total=${raw.size} -> ${segs.joinToString(" ")}")
+            log("ZOOM_SEGS total=${raw.size} -> ${segs.joinToString(" ")}")
 
             runCatching {
                 val dir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
@@ -424,7 +400,15 @@ class LeafRepository(private val context: Context) {
             store.putProcessed(path, finalBytes)
         }
 
-        mutable.update { it.copy(backPreview = ProcessedBackPreview(photo.copy(deviceAddress = it.deviceAddress, connectionGeneration = it.connectionGeneration), frame.value("light", p.encoding.charset), grayPoint)) }
+        mutable.update {
+            it.copy(
+                backPreview = ProcessedBackPreview(
+                    photo.copy(deviceAddress = it.deviceAddress, connectionGeneration = it.connectionGeneration),
+                    frame.value("light", p.encoding.charset),
+                    grayPoint
+                )
+            )
+        }
     }
     fun requestPixelProbe(path: String, point: ImagePoint) = controls(msg(R.string.reading_back_pixel_probe)) { p ->
         val result = ImageOperations.parsePixelProbe(p.execute(ImageOperations.pixelProbe(path, point)), p.encoding)
