@@ -119,13 +119,26 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
         it.photo.path == photo.path && it.photo.deviceAddress == session.deviceAddress &&
             it.photo.connectionGeneration == session.connectionGeneration && it.sampledPoint == null
     }
-    LaunchedEffect(activeBackPreview?.photo?.sha256, backZoomMode) {
+    var lastFocusFraction by remember(photo.path, photo.connectionGeneration) { mutableStateOf<ImageFraction?>(null) }
+    LaunchedEffect(activeBackPreview?.photo?.sha256, backZoomMode, lastFocusFraction) {
         if (!backZoomMode) {
             backZoomBitmap = null
+            lastFocusFraction = null
         } else {
             val file = activeBackPreview?.photo?.cacheFile
             backZoomBitmap = if (file != null) {
-                withContext(Dispatchers.Default) { BitmapFactory.decodeFile(file) }
+                withContext(Dispatchers.Default) {
+                    val decoded = BitmapFactory.decodeFile(file) ?: return@withContext null
+                    val frac = lastFocusFraction ?: return@withContext decoded
+                    val cropSize = min(decoded.width, decoded.height).coerceAtLeast(1)
+                    val cx = (frac.x * decoded.width).toInt().coerceIn(0, decoded.width)
+                    val cy = (frac.y * decoded.height).toInt().coerceIn(0, decoded.height)
+                    val left = (cx - cropSize / 2).coerceIn(0, (decoded.width - cropSize).coerceAtLeast(0))
+                    val top = (cy - cropSize / 2).coerceIn(0, (decoded.height - cropSize).coerceAtLeast(0))
+                    val cropped = Bitmap.createBitmap(decoded, left, top, cropSize, cropSize)
+                    if (cropped !== decoded) decoded.recycle()
+                    cropped
+                }
             } else {
                 null
             }
@@ -255,14 +268,15 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
                                 if (fraction != null) {
                                     val point = focusMapping?.protocolPoint(fraction)
                                     if (point != null) {
-                                        repo.requestBackPreview(photo.path, ImageZoom.entries.first { it.factor == 8 }, point, null, null)
-
-
+                                        lastFocusFraction = fraction
+                                        repo.requestBackPreview(photo.path, ImageZoom.ONE, point, null, null)
                                     } else if (session.operation.isEmpty()) {
                                         repo.requestMetadata(photo.path)
                                     }
                                 }
-                            } else if (grayPicking && backEnabled) {
+                            }
+
+                               else if (grayPicking && backEnabled) {
                                 val current = bounded(viewport.zoom, viewport.x, viewport.y)
                                 val fraction = PhotoViewportGeometry(areaW.toDouble(), areaH.toDouble(), preview.bitmap.width, preview.bitmap.height,
                                     current.zoom.toDouble(), (current.x * fitW).toDouble(), (current.y * fitH).toDouble())
