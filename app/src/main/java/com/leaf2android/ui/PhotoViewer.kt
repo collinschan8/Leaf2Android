@@ -216,14 +216,16 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
                         if (zoomFullScreen) Modifier.fillMaxSize() else Modifier.fillMaxWidth(),
                         contentScale = if (zoomFullScreen) ContentScale.Fit else ContentScale.Crop)
                     Surface(color = Color(0xB8222A20), shape = MaterialTheme.shapes.extraSmall, modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp)) {
-                   Text(if (zoomImage.width < 1000 || zoomImage.height < 1000) {
-                                "1:1 裁切 ${zoomImage.width}×${zoomImage.height}（機背回傳小圖）"
-                            } else {
-                                "1:1 裁切 ${zoomImage.width}×${zoomImage.height}"
-                            },
-                            Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            color = Color(0xFFE3ECDC),
-                            style = MaterialTheme.typography.labelSmall
+                   Text(
+                        if (zoomImage.width < 1000 || zoomImage.height < 1000) {
+                            "1:1 裁切 ${zoomImage.width}×${zoomImage.height}（機背回傳小圖）"
+                        } else {
+                            "1:1 裁切 ${zoomImage.width}×${zoomImage.height}"
+                        },
+                        Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color = Color(0xFFE3ECDC),
+                        style = MaterialTheme.typography.labelSmall
+                    )
                     }
                 }
             } else if (preview == null)  {
