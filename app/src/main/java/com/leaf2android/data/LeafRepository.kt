@@ -339,8 +339,7 @@ class LeafRepository(private val context: Context) {
     fun requestBackPreview(path: String, zoom: ImageZoom, point: ImagePoint?, alarm: ExposureEdge?, grayPoint: ImagePoint?) = controls(msg(R.string.reading_processed_preview)) { p ->
         requireCurrentPhoto(path)
                 if (grayPoint != null) mutable.update { it.copy(backPreview = null) }
-                val frame = p.execute(ImageOperations.preview(path, zoom, point, alarm, grayPoint, packetSize = if (zoom != ImageZoom.FIT) 0 else null, zoomLiteral = if (zoom != ImageZoom.FIT) "FP" else null))
-
+                val frame = p.execute(ImageOperations.preview(path, zoom, point, alarm, grayPoint, packetSize = if (zoom != ImageZoom.FIT) 0 else null, zoomLiteral = if (zoom != ImageZoom.FIT) zoom.factor.toString() else null))
 
 
         
