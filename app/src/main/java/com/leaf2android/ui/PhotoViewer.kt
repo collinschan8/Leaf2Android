@@ -215,8 +215,7 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
                         Text("1:1 (${zoomImage.width}×${zoomImage.height})", Modifier.padding(horizontal = 8.dp, vertical = 4.dp), color = Color(0xFFE3ECDC), style = MaterialTheme.typography.labelSmall)
                     }
                 }
-            }
-           } else if (preview == null) {
+            } else if (preview == null)  {
                 Column(Modifier.align(Alignment.Center).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     if (photo.cacheFile != null && loadError == null) CircularProgressIndicator(Modifier.size(24.dp))
                     else Text(loadError ?: if (connected) tr(R.string.requesting_preview_20b1e) else tr(R.string.this_preview_is_not_cached_connect_to_the_back_c43ff), color = Color(0xFFC7D4C1))
