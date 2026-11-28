@@ -201,16 +201,48 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
             val preview = loaded
             val zoomImage = if (backZoomMode) backZoomBitmap else null
             if (zoomImage != null) {
-                Box(Modifier.fillMaxSize().pointerInput(photo.path) {
-                    detectTapGestures(onTap = {
-                        backZoomBitmap = null
-                    })
-                }, contentAlignment = Alignment.Center) {
-                    Image(zoomImage.asImageBitmap(), "1:1 Focus Crop", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-                    Surface(color = Color(0xB8222A20), shape = MaterialTheme.shapes.extraSmall, modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp)) {
-                        Text("1:1 Back (${zoomImage.width}×${zoomImage.height})", Modifier.padding(horizontal = 8.dp, vertical = 4.dp), color = Color(0xFFE3ECDC), style = MaterialTheme.typography.labelSmall)
+                var zoomFullScreen by remember(photo.path) { mutableStateOf(false) }
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(photo.path, zoomFullScreen) {
+                            detectTapGestures(
+                                onTap = {
+                                    if (zoomFullScreen) {
+                                        zoomFullScreen = false
+                                    } else {
+                                        backZoomBitmap = null
+                                    }
+                                },
+                                onDoubleTap = {
+                                    zoomFullScreen = !zoomFullScreen
+                                }
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        bitmap = zoomImage.asImageBitmap(),
+                        contentDescription = "1:1 Focus View",
+                        modifier = if (zoomFullScreen) Modifier.fillMaxSize() else Modifier.fillMaxWidth(),
+                        contentScale = if (zoomFullScreen) ContentScale.Fit else ContentScale.Crop
+                    )
+                    Surface(
+                        color = Color(0xB8222A20),
+                        shape = MaterialTheme.shapes.extraSmall,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = "1:1 (${zoomImage.width}×${zoomImage.height})",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            color = Color(0xFFE3ECDC),
+                            style = MaterialTheme.typography.labelSmall
+                        )
                     }
                 }
+            }
             } else if (preview == null) {
                 Column(Modifier.align(Alignment.Center).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     if (photo.cacheFile != null && loadError == null) CircularProgressIndicator(Modifier.size(24.dp))
