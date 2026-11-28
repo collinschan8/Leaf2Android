@@ -128,16 +128,7 @@ fun PhotoViewer(photo: LeafPhoto, repo: LeafRepository, connected: Boolean, modi
             val file = activeBackPreview?.photo?.cacheFile
             backZoomBitmap = if (file != null) {
                 withContext(Dispatchers.Default) {
-                    val decoded = BitmapFactory.decodeFile(file) ?: return@withContext null
-                    val frac = lastFocusFraction ?: return@withContext decoded
-                    val cropSize = min(decoded.width, decoded.height).coerceAtLeast(1)
-                    val cx = (frac.x * decoded.width).toInt().coerceIn(0, decoded.width)
-                    val cy = (frac.y * decoded.height).toInt().coerceIn(0, decoded.height)
-                    val left = (cx - cropSize / 2).coerceIn(0, (decoded.width - cropSize).coerceAtLeast(0))
-                    val top = (cy - cropSize / 2).coerceIn(0, (decoded.height - cropSize).coerceAtLeast(0))
-                    val cropped = Bitmap.createBitmap(decoded, left, top, cropSize, cropSize)
-                    if (cropped !== decoded) decoded.recycle()
-                    cropped
+                    BitmapFactory.decodeFile(file)
                 }
             } else {
                 null
